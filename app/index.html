@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HeatLab Analytics: urban 2 m air-temperature downscaling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F5;--panel:#fff;--bd:#D8DEE8;--bd2:#E7EBF2;--tx:#18202F;--mu:#5C687C;--mu2:#8792A5;
+  --nav:#0F1A2B;--nav2:#1A2740;--acc:#E4572E;--ok:#14876F;--warn:#B7791F;--bad:#C0392B;
+  --f:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 12.5px/1.45 var(--f);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+#app{display:grid;grid-template-columns:184px minmax(0,1fr);grid-template-rows:44px 46px minmax(0,1fr);height:100vh}
+/* top bar */
+#top{grid-column:1/3;background:var(--nav);color:#fff;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid #000}
+#top b{font-weight:700;font-size:14px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+#top b i{width:14px;height:14px;border-radius:50%;background:conic-gradient(from 200deg,#4A5BFF,#B13CA6,#F4572E,#FFC24B,#4A5BFF)}
+#top .sep{width:1px;height:18px;background:#3A4864}
+#top .sub{color:#A9B4CA;font-size:12px}
+#top .sp{flex:1}
+.chip{font-size:11.5px;padding:2px 9px;border-radius:99px;border:1px solid #3A4864;color:#C8D0E0;white-space:nowrap}
+.chip.w{border-color:#8A6A24;color:#F0C766}
+/* nav */
+#nav{grid-row:2/4;background:var(--nav);padding:8px 8px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+#nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:5px;color:#B6C0D4;font-size:12.5px;font-weight:500}
+#nav button:hover{background:var(--nav2);color:#fff}
+#nav button[aria-current=true]{background:var(--nav2);color:#fff;box-shadow:inset 3px 0 0 var(--acc)}
+#nav button:focus-visible{outline:2px solid var(--acc)}
+#nav svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#nav .grp{font-size:10.5px;color:#6F7C97;padding:12px 10px 4px;font-weight:600}
+#nav .foot{margin-top:auto;font-size:11px;color:#7F8CA7;padding:10px;line-height:1.5;border-top:1px solid #243250}
+/* filters */
+#filters{background:#fff;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:16px;padding:0 14px;overflow-x:auto;white-space:nowrap}
+.fg{display:flex;align-items:center;gap:6px}
+.fg>span{font-size:11.5px;color:var(--mu);font-weight:500}
+.seg{display:flex;border:1px solid var(--bd);border-radius:5px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:4px 10px;font-size:12px;font-weight:500;border-left:1px solid var(--bd);color:var(--tx);background:#fff}
+.seg button:first-child{border-left:0}
+.seg button:hover{background:#F2F4F8}
+.seg button[aria-pressed=true]{background:var(--nav);color:#fff}
+.seg button:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+.cb{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 7px;border:1px solid var(--bd);border-radius:5px;cursor:pointer;background:#fff;font-size:12px;font-weight:500}
+.cb i{width:9px;height:9px;border-radius:2px;background:var(--c)}
+.cb[aria-pressed=false]{opacity:.45;background:#F5F7FA}
+.cb small{color:var(--mu);font-weight:400}
+select{border:1px solid var(--bd);border-radius:5px;padding:3px 6px;background:#fff;font-size:12px}
+.ghost{all:unset;cursor:pointer;padding:4px 9px;border:1px solid var(--bd);border-radius:5px;font-size:12px;font-weight:500}
+.ghost:hover{background:#F2F4F8}
+#fsum{margin-left:auto;color:var(--mu);font-size:12px;white-space:nowrap}
+#fsum b{color:var(--tx);font-weight:600}
+/* main */
+#main{overflow:auto;padding:10px 12px 18px;min-width:0}
+.view{display:none}.view.on{display:block}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px}
+.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}.s12{grid-column:span 12}
+.h200{height:200px}.h340{height:340px}.h520{height:520px}.h240{height:240px}.h280{height:280px}.h320{height:320px}.h380{height:380px}.h440{height:440px}.hauto{height:auto}
+.p{background:var(--panel);border:1px solid var(--bd);border-radius:6px;display:flex;flex-direction:column;min-height:0;min-width:0}
+.ph{display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--bd2);min-height:34px}
+.ph h3{margin:0;font-size:12.5px;font-weight:600;letter-spacing:-.005em;white-space:nowrap}
+.ph .st{color:var(--mu);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.ph .ctl{margin-left:auto;display:flex;gap:8px;align-items:center}
+.pb{flex:1;min-height:0;position:relative;overflow:hidden}
+.pb.sc{overflow:auto}
+.pb svg,.pb canvas{display:block;width:100%;height:100%}
+.note{font-size:11.5px;color:var(--mu);padding:5px 10px;border-top:1px solid var(--bd2);line-height:1.4}
+.leg{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--mu);padding:5px 10px;border-top:1px solid var(--bd2)}
+.leg span{display:inline-flex;align-items:center;gap:5px}
+.leg i{display:inline-block;width:16px;height:3px;border-radius:2px;background:var(--c)}
+.leg i.d{background:repeating-linear-gradient(90deg,var(--c) 0 4px,transparent 4px 7px)}
+.leg i.dot{width:8px;height:8px;border-radius:50%}
+/* kpi */
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:10px}
+.k{background:var(--panel);border:1px solid var(--bd);border-radius:6px;padding:9px 11px 8px;min-width:0}
+.k .l{font-size:11.5px;color:var(--mu);font-weight:500;display:flex;justify-content:space-between;gap:6px}
+.k .v{font-size:25px;font-weight:650;letter-spacing:-.02em;line-height:1.15;margin-top:2px}
+.k .v small{font-size:12px;font-weight:500;color:var(--mu);margin-left:3px;letter-spacing:0}
+.k .r{font-size:11.5px;color:var(--mu);margin-top:2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.d{font-weight:600;padding:0 6px;border-radius:3px;font-size:11.5px}
+.d.g{background:#DDF1EA;color:#0C6A56}.d.b{background:#F7DCD7;color:#9B2B1D}.d.n{background:#E7EBF2;color:#46526A}.d.w{background:#F8E8C9;color:#7A4E0A}
+.bar{height:6px;border-radius:3px;background:#E7EBF2;margin-top:6px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+/* findings */
+.fl{list-style:none;margin:0;padding:4px 10px 6px;overflow:auto;height:100%}
+.fl li{display:grid;grid-template-columns:16px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd2);font-size:12.5px;line-height:1.4}
+.fl li:last-child{border:0}
+.fl .ic{width:8px;height:8px;border-radius:50%;margin-top:5px}
+.fl .i-ok{background:var(--ok)}.fl .i-w{background:var(--warn)}.fl .i-n{background:var(--mu2)}.fl .i-b{background:var(--bad)}
+/* table */
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:4px 7px;border-bottom:1px solid var(--bd2);text-align:right;white-space:nowrap}
+th{position:sticky;top:0;background:#F6F8FB;font-weight:600;color:var(--mu);cursor:pointer;user-select:none;z-index:1;border-bottom:1px solid var(--bd)}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+tbody tr{cursor:pointer}tbody tr:hover{background:#F6F8FB}tbody tr.sel{background:#FDEBE5}
+td.b{font-weight:600}
+.pos{color:#0C6A56}.neg{color:#9B2B1D}
+.gt{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;padding:10px}
+.gt button{all:unset;cursor:pointer;text-align:center;padding:7px 0;border-radius:4px;font-weight:600;font-size:12px;color:#fff;border:2px solid transparent}
+.gt .pass{background:var(--ok)}.gt .warn{background:#C98A1B}.gt .fail{background:var(--bad)}
+.gt button[aria-pressed=true]{border-color:var(--tx)}
+.gd{padding:2px 12px 12px;font-size:12.5px}.gd h4{margin:4px 0 6px;font-size:13px}.gd p{margin:0 0 5px;max-width:70ch;color:#2D3A52}
+.tip{position:fixed;pointer-events:none;background:#101828;color:#fff;font-size:11.5px;line-height:1.45;padding:6px 9px;border-radius:5px;z-index:60;display:none;max-width:260px;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+.tip b{font-weight:600}
+.lim{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 24px;padding:8px 12px 10px}
+.lim div{padding:6px 0;border-bottom:1px solid var(--bd2)}
+.lim b{display:block;font-size:12.5px}.lim span{color:var(--mu);font-size:12px}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.s3,.s4,.s5,.s6,.s7,.s8{grid-column:span 12}.lim{grid-template-columns:1fr}}
+@media(max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:44px auto auto minmax(0,1fr)}#nav{grid-row:auto;flex-direction:row;overflow-x:auto;padding:4px}#nav .grp,#nav .foot{display:none}#nav button{white-space:nowrap}#filters{grid-column:1;flex-wrap:wrap;padding:6px 10px;gap:8px;white-space:normal}#top{grid-column:1}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top"><b><i></i>HeatLab</b><span class="sep"></span><span class="sub">Urban 2 m air-temperature downscaling · station-level validation</span><span class="sp"></span><span class="chip">FAIRUrbTemp · ERA5 · OpenStreetMap · WorldCover</span><span class="chip w">Validated in 4 European cities only</span></header>
+  <nav id="nav" aria-label="Views"></nav>
+  <div id="filters" role="region" aria-label="Global filters"></div>
+  <main id="main"></main>
+</div>
+<div class="tip" id="tip"></div>
+<script src="data.js"></script>
+<script>
+const D=window.HEATLAB,R=D.results,ST=D.stations,CITIES=D.cities,$=s=>document.querySelector(s),NS='http://www.w3.org/2000/svg';
+const CN={Biel:'Biel',Ghent:'Ghent',NoviSad:'Novi Sad',Rennes:'Rennes'},CCOL=['#4C6FFF','#9B59D0','#D9A21B','#2E9E6E'];  // by CITIES order: Rennes, Biel, NoviSad, Ghent
+const M=['e','h','l','i'],MN={e:'Raw ERA5',h:'ERA5 + hour offset',l:'HeatLab',i:'Neighbour sensors (IDW)'},MC={e:'#8A94A8',h:'#4F5D75',l:'#E4572E',i:'#14876F'};
+const f1=x=>(+x).toFixed(1),f2=x=>(+x).toFixed(2),f3=x=>(+x).toFixed(3),sg=(x,d=2)=>{const r=Math.abs(x).toFixed(d);return(+r===0?'':x>0?'+':'−')+r},pc=x=>Math.round(x*100)+'%',hh=h=>String(h).padStart(2,'0'),K=n=>n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?Math.round(n/1e3)+'k':''+n;
+const el=(n,a={},p)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const tip=$('#tip');const showTip=(e,h)=>{tip.innerHTML=h;tip.style.display='block';const w=tip.offsetWidth;tip.style.left=Math.min(e.clientX+14,innerWidth-w-8)+'px';tip.style.top=Math.min(e.clientY+14,innerHeight-tip.offsetHeight-8)+'px'},hideTip=()=>tip.style.display='none';
+
+/* ---------------- state ---------------- */
+const S={view:'overview',cities:new Set([0,1,2,3]),nf:'all',h0:0,h1:23,sel:null,mapMetric:'rl',show:{e:true,h:true,l:true,i:false},scMod:'l',sortKey:'rl',sortDir:1,weekStation:null};
+const COLS=D.agg.cols,CI=Object.fromEntries(COLS.map((c,i)=>[c,i+3]));
+const inH=h=>S.h0<=S.h1?(h>=S.h0&&h<=S.h1):(h>=S.h0||h<=S.h1);
+const rowsF=()=>D.agg.rows.filter(r=>S.cities.has(r[0])&&inH(r[1])&&(S.nf==='all'||r[2]===S.nf));
+function tot(rows){const t={n:0,cov:0,m:{}};M.forEach(k=>t.m[k]={se:0,ae:0,b:0,w:0});rows.forEach(r=>{t.n+=r[3];t.cov+=r[4];M.forEach(k=>{const m=t.m[k];m.se+=r[CI['se_'+k]];m.ae+=r[CI['ae_'+k]];m.b+=r[CI['b_'+k]];m.w+=r[CI['w_'+k]]})});return t}
+const rmse=(t,k)=>t.n?Math.sqrt(t.m[k].se/t.n):NaN,mae=(t,k)=>t.n?t.m[k].ae/t.n:NaN,bias=(t,k)=>t.n?t.m[k].b/t.n:NaN,w1=(t,k)=>t.n?t.m[k].w/t.n:NaN;
+const nfi=()=>S.nf==='all'?0:S.nf===0?1:2;           // index into per-station [all, day, night] arrays
+const selStations=()=>ST.filter(s=>S.cities.has(CITIES.indexOf(s.city)));
+const stKey=s=>s.city+'|'+s.id;
+
+/* ---------------- layout scaffolding ---------------- */
+const ICON={geo:'<path d="M12 3l9 5-9 5-9-5 9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5"/>',overview:'<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>',time:'<path d="M3 20V4M3 20h18M7 15l4-5 3 3 6-8"/>',stations:'<path d="M12 21s-6-5.3-6-10a6 6 0 1112 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>',cities:'<path d="M4 20V9l5-3v14M9 20V4l6 3v13M15 20v-8l5-2v10M2 20h20"/>',drivers:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',valid:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'};
+const VIEWS=[['overview','Overview'],['time','Time & conditions'],['stations','Stations'],['cities','Cities & transfer'],['drivers','Drivers'],['geo','Geospatial & GPU'],['valid','Validity & scope']];
+$('#nav').innerHTML='<div class="grp">ANALYSIS</div>'+VIEWS.map(([k,t])=>`<button data-v="${k}" aria-current="${k===S.view}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${t}</button>`).join('')+`<div class="foot">Out-of-fold predictions only: every number comes from stations the model never trained on.<br><br>Hours are UTC.</div>`;
+$('#nav').onclick=e=>{const b=e.target.closest('button');if(b)go(b.dataset.v)};
+const P=(id,cls,title,st,ctl,body,extra='')=>`<section class="p ${cls}" id="p-${id}"><div class="ph"><h3>${title}</h3><span class="st">${st||''}</span><div class="ctl" id="c-${id}">${ctl||''}</div></div><div class="pb ${body||''}" id="b-${id}"></div>${extra}</section>`;
+$('#main').innerHTML=`
+<div class="view on" id="v-overview">
+  <div class="kpis" id="kpis"></div>
+  <div class="grid">
+    ${P('map','s5 h520','Station map','Error by station, honours the day/night filter','<select id="mapMetric" aria-label="Map metric"></select>','','<div id="mapLegend" class="leg"></div><div class="note" id="mapSel">Click a station to select it.</div>')}
+    <div class="s7" style="display:grid;grid-template-rows:1fr 1fr;gap:10px;height:520px;min-height:0">
+      ${P('rmseh','','Error by hour of day','RMSE, °C, selected cities','','','<div class="leg" id="l-rmseh"></div>')}
+      ${P('anomh','','Measured vs predicted anomaly by hour','Station minus ERA5, °C: how far the street departs from the grid cell','','','<div class="leg" id="l-anomh"></div>')}
+    </div>
+    ${P('scat','s4 h340','Predicted vs measured','Anomaly, °C · sample of held-out hours','<div class="seg" id="scMod"></div>','','<div class="note" id="n-scat"></div>')}
+    ${P('hist','s4 h340','Error distribution','Prediction minus measurement, °C','','','<div class="leg" id="l-hist"></div>')}
+    ${P('find','s4 h340','Findings for the current selection','Computed from the filtered results','','','')}
+  </div>
+</div>
+<div class="view" id="v-time"><div class="grid">
+  ${P('month','s8 h280','Error over time','Monthly RMSE, °C · months under 1,000 station-hours hidden','','','<div class="leg" id="l-month"></div>')}
+  ${P('temp','s4 h280','Error by ERA5 air temperature','RMSE, °C: does skill hold in warm hours?','','','<div class="leg" id="l-temp"></div>')}
+  ${P('week','s8 h320','Station week: thermometer vs model','Pick a station; out-of-fold predictions','<select id="wkSel" aria-label="Station"></select>','','<div class="leg" id="l-week"></div><div class="note" id="n-week"></div>')}
+  ${P('covh','s4 h320','80% interval coverage by hour','Share of readings inside the model band','','','<div class="note" id="n-covh"></div>')}
+</div></div>
+<div class="view" id="v-stations"><div class="grid">
+  ${P('tbl','s8 h440','Station table','Click a row to select. Metrics honour the day/night filter.','','sc','')}
+  <div class="s4" style="display:grid;grid-template-rows:1fr 1fr;gap:10px;height:440px;min-height:0">
+    ${P('st-sc','','Surroundings vs anomaly','Per station','<select id="stX" aria-label="X axis"></select>','','<div class="leg" id="l-stsc"></div>')}
+    ${P('st-gain','','Gain by station','RMSE reduction vs ERA5, ranked','','','')}
+  </div>
+</div></div>
+<div class="view" id="v-cities"><div class="grid">
+  ${P('cmp','s7 h320','City comparison','RMSE, °C, current time filter','','','<div class="leg" id="l-cmp"></div>')}
+  ${P('ctab','s5 h320','City summary','','','sc','')}
+  ${P('loco','s6 h280','Held-out city (transfer)','Trained on three cities, tested on the fourth','','','<div class="leg" id="l-loco"></div>')}
+  ${P('tmp','s6 h280','Later in time, same cities','Trained on the early record, tested on the later one','','','<div class="leg" id="l-tmp"></div>')}
+  ${P('leak','s6 h200','Validation design changes the answer','Same model, three ways of scoring','','','<div class="note" id="n-leak"></div>')}
+  ${P('ab','s6 h200','Model ablations (spatial blocks)','What each input group is worth, RMSE °C','','','<div class="note" id="n-ab"></div>')}
+</div></div>
+<div class="view" id="v-drivers"><div class="grid">
+  ${P('shap','s5 h440','Feature importance','Mean |SHAP|, °C','','','<div class="leg"><span><i class="dot" style="--c:#17143D"></i>ERA5 weather and time</span><span><i class="dot" style="--c:#E4572E"></i>Surroundings and position</span></div>')}
+  ${P('sens','s7 h440','Predicted anomaly as surroundings change','All panels share one vertical scale (°C)','','','<div class="leg"><span><i style="--c:#17143D"></i>Night</span><span><i style="--c:#E4572E"></i>Day</span><span style="margin-left:auto">Associations, not causal effects</span></div>')}
+  ${P('rel','s12 hauto','Measured station anomaly vs surroundings','Spearman correlation across stations, per city. Bold: p&lt;0.05. Ghent (6 stations) excluded','','sc','<div class="note">Each cell uses 23 to 40 stations. A correlation tells you where the street runs warm or cool in the data; it does not show what a planting or paving change would do.</div>')}
+</div></div>
+<div class="view" id="v-valid"><div class="grid">
+  ${P('gates','s7 h280','Validity checks','Run by the agent before results are reported','','','')}
+  ${P('cal','s5 h280','Interval calibration by city','Share of readings inside the 80% band (target 80%)','','','<div class="note" id="n-cal"></div>')}
+  ${P('lim','s12 hauto','Scope and limits','','','','')}
+  ${P('prov','s12 hauto','Provenance and model','','','','')}
+</div></div>
+<div class="view" id="v-geo"><div class="grid">
+  ${P('abl','s7 h280','Which surroundings data helps','RMSE reduction versus weather and time only, °C (5-fold spatial CV, LightGBM)','','','<div class="note" id="n-abl"></div>')}
+  ${P('dlt','s5 hauto','Neural network on GPU vs LightGBM','Same folds, same rows; trained on a Colab T4','','','<div class="note" id="n-dlt"></div>')}
+  ${P('ref','s6 hauto','Checking OSM features against satellite land cover','Correlation of water share within 250 m with ESA WorldCover, per city','','','<div class="note" id="n-ref"></div>')}
+  ${P('lay','s6 hauto','Geospatial data layers','CRS handling and how each layer enters the model','','','')}
+</div></div>`;
+const GATEHTML='';
+
+/* ---------------- filters ---------------- */
+function buildFilters(){
+  const f=$('#filters');
+  f.innerHTML=`<div class="fg"><span>Cities</span>${CITIES.map((c,i)=>`<button class="cb" data-c="${i}" aria-pressed="${S.cities.has(i)}" style="--c:${CCOL[i]}"><i></i>${CN[c]} <small>${ST.filter(s=>s.city===c).length}</small></button>`).join('')}</div>
+  <div class="fg"><span>Time of day</span><div class="seg" id="nfSeg">${[['all','All'],[0,'Day'],[1,'Night']].map(([v,t])=>`<button data-n="${v}" aria-pressed="${S.nf===v}">${t}</button>`).join('')}</div></div>
+  <div class="fg"><span>Hours (UTC)</span><select id="h0" aria-label="From hour">${[...Array(24).keys()].map(h=>`<option ${h===S.h0?'selected':''} value="${h}">${hh(h)}:00</option>`).join('')}</select><span>to</span><select id="h1" aria-label="To hour">${[...Array(24).keys()].map(h=>`<option ${h===S.h1?'selected':''} value="${h}">${hh(h)}:59</option>`).join('')}</select></div>
+  <button class="ghost" id="reset">Reset</button><div id="fsum"></div>`;
+  f.querySelectorAll('.cb').forEach(b=>b.onclick=()=>{const i=+b.dataset.c;if(S.cities.has(i)){if(S.cities.size===1)return;S.cities.delete(i)}else S.cities.add(i);b.setAttribute('aria-pressed',S.cities.has(i));refresh()});
+  $('#nfSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.nf=b.dataset.n==='all'?'all':+b.dataset.n;[...$('#nfSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b));refresh()};
+  $('#h0').onchange=e=>{S.h0=+e.target.value;refresh()};$('#h1').onchange=e=>{S.h1=+e.target.value;refresh()};
+  $('#reset').onclick=()=>{S.cities=new Set([0,1,2,3]);S.nf='all';S.h0=0;S.h1=23;buildFilters();refresh()};
+}
+function summary(){const t=tot(rowsF());$('#fsum').innerHTML=`<b>${selStations().length}</b> stations · <b>${K(t.n)}</b> station-hours`}
+
+/* ---------------- generic chart helpers ---------------- */
+const dims=id=>{const b=$('#b-'+id);return{w:b.clientWidth,h:b.clientHeight,b}};
+function svgIn(id){const {w,h,b}=dims(id);b.innerHTML='';const s=el('svg',{viewBox:`0 0 ${w} ${h}`,width:w,height:h},b);return{s,w,h,b}}
+function niceTicks(a,b,n=5){const r=b-a||1,st0=r/n,p=Math.pow(10,Math.floor(Math.log10(st0))),m=st0/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,o=[];for(let v=Math.ceil(a/st)*st;v<=b+1e-9;v+=st)o.push(+v.toFixed(6));return o}
+function frame(s,w,h,m,x0,x1,y0,y1,o={}){
+  const iw=w-m.l-m.r,ih=h-m.t-m.b,X=v=>m.l+(v-x0)/(x1-x0)*iw,Y=v=>m.t+ih-(v-y0)/(y1-y0)*ih;
+  niceTicks(y0,y1,Math.max(3,Math.round(ih/46))).forEach(v=>{el('line',{x1:m.l,x2:w-m.r,y1:Y(v),y2:Y(v),stroke:v===0&&o.zero?'#8792A5':'#E7EBF2','stroke-width':1},s);el('text',{x:m.l-6,y:Y(v)+3.5,'text-anchor':'end','font-size':10.5,fill:'#5C687C'},s).textContent=o.yf?o.yf(v):+v.toFixed(2)});
+  (o.xt||niceTicks(x0,x1,Math.max(3,Math.round(iw/80)))).forEach(v=>{const t=Array.isArray(v)?v:[v,o.xf?o.xf(v):v];el('line',{x1:X(t[0]),x2:X(t[0]),y1:m.t+ih,y2:m.t+ih+3,stroke:'#8792A5'},s);el('text',{x:X(t[0]),y:h-m.b+15,'text-anchor':'middle','font-size':10.5,fill:'#5C687C'},s).textContent=t[1]});
+  el('line',{x1:m.l,x2:w-m.r,y1:m.t+ih,y2:m.t+ih,stroke:'#8792A5'},s);
+  if(o.yl)el('text',{x:m.l,y:m.t-7,'font-size':10.5,fill:'#5C687C'},s).textContent=o.yl;
+  if(o.xl)el('text',{x:w-m.r,y:h-3,'text-anchor':'end','font-size':10.5,fill:'#5C687C'},s).textContent=o.xl;
+  return{X,Y,iw,ih,m};
+}
+const path=(pts,X,Y)=>{let d='',on=false;pts.forEach(([x,y])=>{if(y==null||isNaN(y)){on=false;return}d+=(on?'L':'M')+X(x).toFixed(1)+' '+Y(y).toFixed(1);on=true});return d};
+function legend(id,items){const e=$('#'+id);if(e)e.innerHTML=items.map(([c,t,d,dot])=>`<span><i class="${d?'d':''} ${dot?'dot':''}" style="--c:${c}"></i>${t}</span>`).join('')}
+/* multi-line chart with crosshair tooltip. series: {k,name,color,dash,w,pts:[[x,y]]} */
+function lines(id,series,o){
+  const {s,w,h}=svgIn(id),m=o.m||{l:42,r:12,t:18,b:24},all=series.flatMap(q=>q.pts.map(p=>p[1])).filter(v=>v!=null&&!isNaN(v));
+  if(!all.length){el('text',{x:w/2,y:h/2,'text-anchor':'middle',fill:'#8792A5'},s).textContent='No data for this selection';return}
+  let y0=o.y0!=null?o.y0:Math.min(...all),y1=o.y1!=null?o.y1:Math.max(...all);const pad=(y1-y0)*.08||.1;if(o.y0==null)y0-=pad;if(o.y1==null)y1+=pad;
+  const a=frame(s,w,h,m,o.x0,o.x1,y0,y1,{yl:o.yl,xl:o.xl,xt:o.xt,xf:o.xf,zero:o.zero,yf:o.yf});
+  (o.shade||[]).forEach(([a0,a1,c])=>el('rect',{x:a.X(a0),y:m.t,width:Math.max(0,a.X(a1)-a.X(a0)),height:a.ih,fill:c||'rgba(15,26,43,.05)'},s));
+  if(o.ref!=null)el('line',{x1:m.l,x2:w-m.r,y1:a.Y(o.ref),y2:a.Y(o.ref),stroke:'#8792A5','stroke-dasharray':'4 3'},s);
+  if(o.band){const b=o.band;let d='';b.forEach(([x,lo,hi],i)=>d+=(i?'L':'M')+a.X(x)+' '+a.Y(hi));for(let i=b.length-1;i>=0;i--)d+='L'+a.X(b[i][0])+' '+a.Y(b[i][1]);el('path',{d:d+'Z',fill:'#E4572E',opacity:.14},s)}
+  series.forEach(q=>el('path',{d:path(q.pts,a.X,a.Y),fill:'none',stroke:q.color,'stroke-width':q.w||2,'stroke-dasharray':q.dash||'','stroke-linejoin':'round','stroke-linecap':'round'},s));
+  if(o.marker)series.forEach(q=>q.pts.forEach(([x,y])=>{if(y!=null&&!isNaN(y))el('circle',{cx:a.X(x),cy:a.Y(y),r:2.4,fill:q.color},s)}));
+  const g=el('line',{y1:m.t,y2:m.t+a.ih,stroke:'#18202F','stroke-width':1,opacity:0},s),hit=el('rect',{x:m.l,y:m.t,width:a.iw,height:a.ih,fill:'transparent'},s);
+  hit.onmousemove=e=>{const r=s.getBoundingClientRect(),px=(e.clientX-r.left)*(w/r.width),xv=o.x0+(px-m.l)/a.iw*(o.x1-o.x0),ref=series[0].pts;let best=ref[0][0],bd=1e18;ref.forEach(p=>{const d=Math.abs(p[0]-xv);if(d<bd){bd=d;best=p[0]}});g.setAttribute('x1',a.X(best));g.setAttribute('x2',a.X(best));g.setAttribute('opacity',.45);
+    showTip(e,`<b>${o.tf?o.tf(best):best}</b>`+series.map(q=>{const p=q.pts.find(z=>z[0]===best);return p&&p[1]!=null&&!isNaN(p[1])?`<br><span style="color:${q.color}">●</span> ${q.name}: ${o.vf?o.vf(p[1]):f2(p[1])}`:''}).join(''))};
+  hit.onmouseleave=()=>{g.setAttribute('opacity',0);hideTip()};
+}
+/* ---------------- KPIs ---------------- */
+function kpis(){
+  const t=tot(rowsF()),rl=rmse(t,'l'),re=rmse(t,'e'),rh=rmse(t,'h'),gain=(re-rl)/re;
+  const covv=t.cov/t.n,covw=covv<.73||covv>.87;
+  const bar=(v,mx,c)=>`<div class="bar"><i style="width:${clamp(v/mx*100,0,100)}%;background:${c}"></i></div>`;
+  const dlt=(v,ref,low=true)=>{const d=v-ref,good=low?d<0:d>0;return`<span class="d ${Math.abs(d)<.005?'n':good?'g':'b'}">${sg(d)}</span>`};
+  const mx=Math.max(re,rh,rl);
+  $('#kpis').innerHTML=`
+  <div class="k"><div class="l">RMSE, HeatLab</div><div class="v">${f2(rl)}<small>°C</small></div><div class="r"><span class="d g">${sg(-gain*100,0)}%</span> vs raw ERA5 ${f2(re)}</div>${bar(rl,mx,MC.l)}${bar(rh,mx,MC.h)}${bar(re,mx,MC.e)}</div>
+  <div class="k"><div class="l">MAE, HeatLab</div><div class="v">${f2(mae(t,'l'))}<small>°C</small></div><div class="r">${dlt(mae(t,'l'),mae(t,'e'))} vs ERA5 ${f2(mae(t,'e'))}</div><div class="r">offset ${f2(mae(t,'h'))}</div></div>
+  <div class="k"><div class="l">Mean error (bias)</div><div class="v">${sg(bias(t,'l'))}<small>°C</small></div><div class="r">ERA5 ${sg(bias(t,'e'))} · offset ${sg(bias(t,'h'))}</div><div class="r">${bias(t,'e')<0?'ERA5 reads cooler than the street':'ERA5 reads warmer than the street'}</div></div>
+  <div class="k"><div class="l">Within ±1 °C</div><div class="v">${pc(w1(t,'l'))}</div><div class="r">${dlt(w1(t,'l')*100,w1(t,'e')*100,false).replace(/(\d)\.\d+/,'$1')}<span> pts vs ERA5 ${pc(w1(t,'e'))}</span></div><div class="r">offset ${pc(w1(t,'h'))}</div></div>
+  <div class="k"><div class="l">80% interval coverage</div><div class="v">${pc(covv)}</div><div class="r"><span class="d ${covw?'w':'g'}">${covw?'outside 73–87%':'calibrated'}</span> target 80%</div></div>
+  <div class="k"><div class="l">Held-out sample</div><div class="v">${K(t.n)}</div><div class="r">station-hours · ${selStations().length} stations</div><div class="r">vs neighbour-sensor IDW ${f2(rmse(t,'i'))} °C</div></div>`;
+}
+/* ---------------- map ---------------- */
+const MET={rl:['HeatLab RMSE (°C)','seq',s=>s.rl[nfi()]],gain:['RMSE reduction vs ERA5 (°C)','seq',s=>s.re[nfi()]-s.rl[nfi()]],ad:['Measured anomaly vs ERA5 (°C)','div',s=>s.ad[nfi()]],bl:['HeatLab bias (°C)','div',s=>s.bl[nfi()]],re:['Raw ERA5 RMSE (°C)','seq',s=>s.re[nfi()]]};
+$('#mapMetric').innerHTML=Object.keys(MET).map(k=>`<option value="${k}">${MET[k][0]}</option>`).join('');$('#mapMetric').onchange=e=>{S.mapMetric=e.target.value;drawMap()};
+const SEQ=['#FFF4D6','#FDD28A','#F59A4E','#E4572E','#9E2A2B','#4A1536'],DIV=['#2F5FD0','#8FB1EC','#F1F3F8','#F3A98B','#D8472A'];
+const ramp=(st,t)=>{t=clamp(t,0,1)*(st.length-1);const i=Math.min(st.length-2,Math.floor(t)),u=t-i,a=st[i],b=st[i+1],p=c=>[1,3,5].map(j=>parseInt(c.slice(j,j+2),16));const A=p(a),B=p(b);return`rgb(${A.map((x,k)=>Math.round(x+(B[k]-x)*u)).join(',')})`};
+function drawMap(){
+  const {s,w,h}=svgIn('map'),def=MET[S.mapMetric],ss=selStations(),vals=ss.map(def[2]).filter(v=>v!=null&&!isNaN(v));
+  if(!vals.length)return;let lo=Math.min(...vals),hi=Math.max(...vals);if(def[1]==='div'){const m=Math.max(Math.abs(lo),Math.abs(hi));lo=-m;hi=m}
+  const col=v=>v==null||isNaN(v)?'#CFD6E2':def[1]==='div'?ramp(DIV,(v-lo)/(hi-lo)):ramp(SEQ,(v-lo)/(hi-lo));
+  const cs=[...S.cities].sort(),n=cs.length,cols=n===1?1:2,rows=Math.ceil(n/cols),fw=w/cols,fh=h/rows;
+  cs.forEach((ci,idx)=>{const c=CITIES[ci],cx=(idx%cols)*fw,cy=Math.floor(idx/cols)*fh,sts=ST.filter(q=>q.city===c);
+    el('rect',{x:cx+3,y:cy+3,width:fw-6,height:fh-6,fill:'#F7F9FC',stroke:'#E1E6EF'},s);
+    el('text',{x:cx+10,y:cy+18,'font-size':11.5,'font-weight':600,fill:'#18202F'},s).textContent=`${CN[c]} · ${sts.length} stations`;
+    const pad=26,lat0=sts.reduce((a,q)=>a+q.lat,0)/sts.length,k=Math.cos(lat0*Math.PI/180),xs=sts.map(q=>q.lon*k),ys=sts.map(q=>q.lat),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),sc=Math.min((fw-2*pad)/(x1-x0||1e-3),(fh-2*pad-18)/(y1-y0||1e-3)),ox=cx+(fw-(x1-x0)*sc)/2,oy=cy+10+(fh-18-(y1-y0)*sc)/2+(y1-y0)*sc;
+    const km=sc/111.32,sy=cy+fh-12;el('line',{x1:cx+10,x2:cx+10+2*km,y1:sy,y2:sy,stroke:'#5C687C','stroke-width':2},s);el('text',{x:cx+14+2*km,y:sy+3.5,'font-size':10,fill:'#5C687C'},s).textContent='2 km';
+    sts.forEach(q=>{const x=ox+(q.lon*k-x0)*sc,y=oy-(q.lat-y0)*sc,v=def[2](q),on=S.sel===stKey(q);
+      const g=el('g',{tabindex:0,role:'button','aria-label':`${CN[c]} ${q.id}`,style:'cursor:pointer'},s);
+      if(on)el('circle',{cx:x,cy:y,r:11,fill:'none',stroke:'#18202F','stroke-width':2},g);
+      el('circle',{cx:x,cy:y,r:6.5,fill:col(v),stroke:'#fff','stroke-width':1.2},g);
+      const over=e=>showTip(e,`<b>${CN[c]} ${q.id}</b><br>${def[0]}: ${v==null?'n/a':f2(v)}<br>ERA5 RMSE ${f2(q.re[nfi()])} → HeatLab ${f2(q.rl[nfi()])}<br>Built-up ${pc(q.bld)} · vegetation ${pc(q.veg)} · water ${pc(q.wat)} (250 m)`);
+      g.onmousemove=over;g.onmouseleave=hideTip;g.onclick=()=>pickStation(stKey(q));g.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pickStation(stKey(q))}}})});
+  const grad=def[1]==='div'?DIV:SEQ;
+  $('#mapLegend').innerHTML=`<span style="font-weight:500;color:#18202F">${def[0]}</span><span>${f2(lo)}</span><span style="width:150px;height:8px;border-radius:2px;background:linear-gradient(90deg,${grad.join(',')});display:inline-block"></span><span>${f2(hi)}</span><span style="margin-left:auto">Colour scale spans the selected stations</span>`;
+  const q=S.sel&&ST.find(z=>stKey(z)===S.sel);$('#mapSel').innerHTML=q?`<b>${CN[q.city]} ${q.id}</b>: ERA5 RMSE ${f2(q.re[nfi()])} → HeatLab ${f2(q.rl[nfi()])} °C · built-up ${pc(q.bld)}, vegetation ${pc(q.veg)}, ${Math.round(q.elev)} m · <a href="#" id="toSt" style="color:#C13E18">open in Stations</a>`:'Click a station to select it. Selection carries to the Time and Stations views.';
+  const a=$('#toSt');if(a)a.onclick=e=>{e.preventDefault();go('stations')};
+}
+function pickStation(k){hideTip();S.sel=k;S.weekStation=k;const wk=$('#wkSel');if(wk)wk.value=k;refresh()}
+
+/* ---------------- overview charts ---------------- */
+function perHour(){const rows=rowsF(),out=[];for(let h=0;h<24;h++){const r=rows.filter(x=>x[1]===h);out.push(r.length?tot(r):null)}return out}
+function drawRmseHour(){
+  const ph=perHour(),ser=M.filter(k=>S.show[k]).map(k=>({k,name:MN[k],color:MC[k],dash:k==='i'?'5 4':'',w:k==='l'?2.8:1.8,pts:ph.map((t,h)=>[h,t&&t.n>200?rmse(t,k):null])}));
+  const shade=nightBands();
+  lines('rmseh',ser,{x0:0,x1:23,yl:'RMSE, °C',xt:[0,3,6,9,12,15,18,21].map(h=>[h,hh(h)]),shade,tf:h=>hh(h)+':00 UTC',m:{l:36,r:10,t:16,b:22}});
+  const L=$('#l-rmseh');L.innerHTML=M.map(k=>`<span><label style="cursor:pointer;display:inline-flex;gap:5px;align-items:center"><input type="checkbox" data-k="${k}" ${S.show[k]?'checked':''}><i class="${k==='i'?'d':''}" style="--c:${MC[k]}"></i>${MN[k]}${k==='i'?' (needs live sensors)':''}</label></span>`).join('')+'<span style="margin-left:auto"><i class="dot" style="--c:rgba(15,26,43,.18)"></i>Mostly night hours</span>';
+  L.querySelectorAll('input').forEach(c=>c.onchange=()=>{S.show[c.dataset.k]=c.checked;drawRmseHour()});
+}
+function nightBands(){const rows=D.agg.rows.filter(r=>S.cities.has(r[0])),nn=Array(24).fill(0),tt=Array(24).fill(0);rows.forEach(r=>{tt[r[1]]+=r[3];if(r[2]===1)nn[r[1]]+=r[3]});const out=[];let st=null;for(let h=0;h<24;h++){const n=tt[h]&&nn[h]/tt[h]>.5;if(n&&st==null)st=h;if(!n&&st!=null){out.push([st-.5,h-.5]);st=null}}if(st!=null)out.push([st-.5,23.5]);return out}
+function drawAnomHour(){
+  const ph=perHour(),mean=(t,k)=>t&&t.n>200?(k==='o'?-t.m.e.b/t.n:(t.m[k].b-t.m.e.b)/t.n):null;
+  const ser=[{name:'Measured',color:'#18202F',w:2.4,pts:ph.map((t,h)=>[h,mean(t,'o')])},{name:'HeatLab',color:MC.l,w:2.4,pts:ph.map((t,h)=>[h,mean(t,'l')])}];
+  lines('anomh',ser,{x0:0,x1:23,yl:'Station minus ERA5, °C',zero:true,ref:0,xt:[0,3,6,9,12,15,18,21].map(h=>[h,hh(h)]),shade:nightBands(),tf:h=>hh(h)+':00 UTC',m:{l:36,r:10,t:16,b:22},vf:v=>sg(v)});
+  legend('l-anomh',[['#18202F','Measured'],[MC.l,'HeatLab (stations held out)'],['#8792A5','ERA5 grid-cell value (zero)',1]]);
+}
+/* scatter (canvas) */
+function sampleF(){return D.samp.filter(r=>S.cities.has(r[0])&&inH(r[1])&&(S.nf==='all'||r[2]===S.nf))}
+function drawScatter(){
+  const {w,h,b}=dims('scat');b.innerHTML='';const cv=document.createElement('canvas'),dpr=devicePixelRatio||1;cv.width=w*dpr;cv.height=h*dpr;cv.style.width=w+'px';cv.style.height=h+'px';b.appendChild(cv);const c=cv.getContext('2d');c.scale(dpr,dpr);
+  const smp=sampleF(),m={l:38,r:10,t:10,b:30},lo=-5,hi=7,X=v=>m.l+(v-lo)/(hi-lo)*(w-m.l-m.r),Y=v=>h-m.b-(v-lo)/(hi-lo)*(h-m.t-m.b);
+  c.font='10.5px Inter,Segoe UI,sans-serif';c.fillStyle='#5C687C';c.strokeStyle='#E7EBF2';c.textAlign='right';
+  for(let v=-4;v<=6;v+=2){c.beginPath();c.moveTo(m.l,Y(v));c.lineTo(w-m.r,Y(v));c.stroke();c.fillText(v,m.l-5,Y(v)+3.5)}
+  c.textAlign='center';for(let v=-4;v<=6;v+=2)c.fillText(v,X(v),h-m.b+13);c.fillText('Measured anomaly (°C)',(w+m.l)/2,h-4);
+  c.save();c.translate(10,h/2);c.rotate(-Math.PI/2);c.fillText('Predicted anomaly (°C)',0,0);c.restore();
+  c.strokeStyle='#8792A5';c.setLineDash([4,3]);c.beginPath();c.moveTo(X(lo),Y(lo));c.lineTo(X(hi),Y(hi));c.stroke();c.setLineDash([]);
+  const idx=S.scMod==='l'?5:S.scMod==='h'?4:-1;
+  smp.forEach(r=>{const py=idx<0?0:r[idx];c.fillStyle=CCOL[r[0]]+'55';c.beginPath();c.arc(X(r[3]),Y(py),2,0,6.3);c.fill()});
+  let se=0,sb=0;smp.forEach(r=>{const py=idx<0?0:r[idx],e=py-r[3];se+=e*e;sb+=e});const n=smp.length||1;
+  // simple OLS slope of measured on predicted -> reliability
+  let sx=0,sy=0,sxx=0,sxy=0;smp.forEach(r=>{const py=idx<0?0:r[idx];sx+=py;sy+=r[3];sxx+=py*py;sxy+=py*r[3]});const den=n*sxx-sx*sx,sl=den>1e-9?(n*sxy-sx*sy)/den:NaN;
+  $('#n-scat').innerHTML=`${smp.length.toLocaleString()} hours · sample RMSE <b>${f2(Math.sqrt(se/n))}</b> °C · ${S.scMod==='e'?'ERA5 predicts zero anomaly everywhere':`slope of measured on predicted <b>${isNaN(sl)?'n/a':f2(sl)}</b> (1.00 is ideal)`}. Colour = city.`;
+}
+$('#scMod').innerHTML=[['l','HeatLab'],['h','Offset'],['e','ERA5']].map(([k,t])=>`<button data-k="${k}" aria-pressed="${k===S.scMod}">${t}</button>`).join('');
+$('#scMod').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.scMod=b.dataset.k;[...$('#scMod').children].forEach(x=>x.setAttribute('aria-pressed',x===b));drawScatter()};
+function drawHist(){
+  const smp=sampleF(),{s,w,h}=svgIn('hist'),bins=40,lo=-4,hi=4,bw=(hi-lo)/bins,mk=f=>{const c=Array(bins).fill(0);smp.forEach(r=>{const e=f(r);if(e>=lo&&e<hi)c[Math.floor((e-lo)/bw)]++});return c};
+  const E=mk(r=>-r[3]),Hh=mk(r=>r[4]-r[3]),L=mk(r=>r[5]-r[3]),mx=Math.max(...E,...L,...Hh,1)/Math.max(1,smp.length)*100,m={l:36,r:10,t:14,b:28};
+  const a=frame(s,w,h,m,lo,hi,0,mx*1.08,{yl:'% of hours per bin',xl:'Error, °C',yf:v=>(+v).toFixed(1)});
+  [[E,MC.e,1.8],[L,MC.l,2.6]].forEach(([c,col,wd])=>el('path',{d:c.map((v,i)=>(i?'L':'M')+a.X(lo+(i+.5)*bw)+' '+a.Y(v/Math.max(1,smp.length)*100)).join(''),fill:'none',stroke:col,'stroke-width':wd,'stroke-linejoin':'round'},s));
+  el('line',{x1:a.X(0),x2:a.X(0),y1:m.t,y2:m.t+a.ih,stroke:'#18202F','stroke-dasharray':'3 3'},s);
+  const q=(f)=>{const v=smp.map(f).sort((x,y)=>x-y);return v.length?[v[Math.floor(v.length*.05)],v[Math.floor(v.length*.95)]]:[NaN,NaN]};
+  const qe=q(r=>-r[3]),ql=q(r=>r[5]-r[3]);
+  legend('l-hist',[[MC.e,`Raw ERA5: 5–95% of errors in ${sg(qe[0],1)} to ${sg(qe[1],1)}`],[MC.l,`HeatLab: ${sg(ql[0],1)} to ${sg(ql[1],1)}`]]);
+}
+/* findings */
+function findings(){
+  const rows=rowsF(),t=tot(rows),F=[],re=rmse(t,'e'),rl=rmse(t,'l'),rh=rmse(t,'h');
+  F.push(['ok',`HeatLab RMSE is <b>${f2(rl)} °C</b> against ${f2(re)} for raw ERA5 (${sg((rl-re)/re*100,0)}%) and ${f2(rh)} for the hour-of-day offset, over ${K(t.n)} held-out station-hours.`]);
+  const ph=perHour();let best=-1,bg=-1e9,wh=-1,wv=-1;ph.forEach((x,h)=>{if(x&&x.n>200){const g=rmse(x,'e')-rmse(x,'l');if(g>bg){bg=g;best=h}const v=rmse(x,'l');if(v>wv){wv=v;wh=h}}});
+  if(best>=0)F.push(['n',`Largest gain over ERA5 is at <b>${hh(best)}:00 UTC</b> (${f2(bg)} °C lower). HeatLab error peaks at <b>${hh(wh)}:00 UTC</b> (${f2(wv)} °C).`]);
+  const lose=[...S.cities].sort().filter(ci=>{const x=tot(rows.filter(r=>r[0]===ci));return x.n&&rmse(x,'l')>=rmse(x,'h')}).map(ci=>CN[CITIES[ci]]);
+  F.push([lose.length?'w':'ok',lose.length?`In ${lose.join(' and ')}, HeatLab does not beat the hour-of-day offset on this selection.`:`HeatLab beats the hour-of-day offset in every selected city on this selection.`]);
+  const cv=t.cov/t.n;F.push([cv<.73||cv>.87?'w':'ok',`80% interval covers <b>${pc(cv)}</b> of readings${cv<.73?': too narrow, so treat the band as optimistic':''}.`]);
+  F.push(['n',`<b>${pc(w1(t,'l'))}</b> of predictions land within ±1 °C of the thermometer (raw ERA5: ${pc(w1(t,'e'))}).`]);
+  const lc=R.loco;const lw=Object.keys(lc).filter(c=>lc[c].lgbm_full.rmse>=lc[c].hour_mean.rmse).map(c=>CN[c]);
+  F.push(['w',`Transfer to an unseen city is weaker: HeatLab trails the hour offset when ${lw.join(' or ')} is held out. Not validated outside Europe.`]);
+  $('#b-find').innerHTML='<ul class="fl">'+F.map(([c,t])=>`<li><span class="ic i-${c==='ok'?'ok':c==='w'?'w':'n'}"></span><span>${t}</span></li>`).join('')+'</ul>';
+}
+/* ---------------- time view ---------------- */
+function drawMonth(){
+  const yms=D.yms,ser={e:[],h:[],l:[]};
+  const acc={};D.monthly.forEach(r=>{if(!S.cities.has(r[0]))return;if(S.nf!=='all'&&r[2]!==S.nf)return;const a=acc[r[1]]||(acc[r[1]]={n:0,e:0,h:0,l:0});a.n+=r[3];a.e+=r[4];a.h+=r[5];a.l+=r[6]});
+  const idx=Object.keys(acc).map(Number).sort((a,b)=>a-b),lo=idx[0],hi=idx[idx.length-1];
+  ['e','h','l'].forEach(k=>{for(let i=lo;i<=hi;i++){const a=acc[i];ser[k].push([i,a&&a.n>=1000?Math.sqrt(a[k]/a.n):null])}});
+  const yl=i=>{const [y,m]=yms[i].split('-');return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]+' '+y};
+  const xt=[];const span=hi-lo;for(let i=lo;i<=hi;i+=Math.max(1,Math.ceil(span/9)))xt.push([i,yms[i].slice(0,7)]);
+  lines('month',['l','h','e'].map(k=>({name:MN[k],color:MC[k],w:k==='l'?2.4:1.6,pts:ser[k]})),{x0:lo,x1:hi,y0:0,yl:'RMSE, °C',xt,tf:yl,m:{l:40,r:12,t:18,b:24},marker:true});
+  legend('l-month',[[MC.l,'HeatLab'],[MC.h,'ERA5 + hour offset'],[MC.e,'Raw ERA5']]);
+}
+function drawTemp(){
+  const {s,w,h}=svgIn('temp'),acc={};D.temp.forEach(r=>{if(!S.cities.has(r[0]))return;const a=acc[r[1]]||(acc[r[1]]={n:0,e:0,h:0,l:0});a.n+=r[2];a.e+=r[3];a.h+=r[4];a.l+=r[5]});
+  const bins=Object.keys(acc).map(Number).sort((a,b)=>a-b).filter(b=>acc[b].n>=500),m={l:36,r:8,t:16,b:30};if(!bins.length)return;
+  const mx=Math.max(...bins.flatMap(b=>['e','h','l'].map(k=>Math.sqrt(acc[b][k]/acc[b].n))))*1.1,a=frame(s,w,h,m,0,bins.length,0,mx,{yl:'RMSE, °C',xt:[...bins.map((b,i)=>[i,b]),[bins.length,bins[bins.length-1]+5]],xl:'ERA5 air temperature, °C (5 °C bands)'});
+  const bw=a.iw/bins.length*.8/3;bins.forEach((b,i)=>['e','h','l'].forEach((k,j)=>{const v=Math.sqrt(acc[b][k]/acc[b].n),x=a.X(i+.1)+j*bw,r=el('rect',{x,y:a.Y(v),width:bw-1,height:a.ih+m.t-a.Y(v),fill:MC[k]},s);r.onmousemove=e=>showTip(e,`<b>ERA5 ${b}…${b+5} °C</b> · ${K(acc[b].n)} hours<br>${MN[k]}: ${f2(v)} °C`);r.onmouseleave=hideTip}));
+  legend('l-temp',[[MC.e,'Raw ERA5'],[MC.h,'Hour offset'],[MC.l,'HeatLab']]);
+}
+function wkOptions(){const w=$('#wkSel');if(w.options.length)return;CITIES.forEach(c=>{const g=document.createElement('optgroup');g.label=CN[c];ST.filter(s=>s.city===c).forEach(s=>{const o=document.createElement('option');o.value=stKey(s);o.textContent=s.id;g.appendChild(o)});w.appendChild(g)});w.value=S.weekStation||'Rennes|SM14';w.onchange=()=>{S.weekStation=w.value;S.sel=w.value;drawWeek()}}
+function drawWeek(){
+  const k=S.weekStation||'Rennes|SM14',wk=D.weeks[k],st=ST.find(z=>stKey(z)===k),n=wk.t_obs.length,T=[...Array(n).keys()];
+  lines('week',[{name:'Raw ERA5',color:MC.e,w:1.6,pts:T.map(i=>[i,wk.era5[i]])},{name:'HeatLab',color:MC.l,w:2.2,pts:T.map(i=>[i,wk.pred[i]])},{name:'Thermometer',color:'#18202F',w:1.6,pts:T.map(i=>[i,wk.t_obs[i]])}],{x0:0,x1:n-1,yl:'Air temperature, °C',xt:[0,1,2,3,4,5,6].map(d=>[d*24,'day '+(d+1)]),band:T.map(i=>[i,wk.q10[i],wk.q90[i]]),m:{l:40,r:12,t:18,b:24},tf:i=>`${wk.start} +${i} h`,vf:v=>f1(v)+' °C'});
+  legend('l-week',[['#18202F','Thermometer'],[MC.l,'HeatLab'],[MC.e,'Raw ERA5'],['rgba(228,87,46,.3)','80% interval']]);
+  const rm=(a)=>Math.sqrt(a.reduce((q,v,i)=>q+(v-wk.t_obs[i])**2,0)/n),ins=wk.t_obs.filter((v,i)=>v>=wk.q10[i]&&v<=wk.q90[i]).length/n;
+  $('#n-week').innerHTML=`<b>${CN[st.city]} ${st.id}</b>, week from ${wk.start} UTC: HeatLab ${f2(rm(wk.pred))} °C vs raw ERA5 ${f2(rm(wk.era5))} °C · ${pc(ins)} of readings inside the band · built-up ${pc(st.bld)}, vegetation ${pc(st.veg)} (250 m)`;
+}
+function drawCovH(){
+  const ph=perHour(),pts=ph.map((t,h)=>[h,t&&t.n>200?t.cov/t.n*100:null]);
+  lines('covh',[{name:'Coverage %',color:'#18202F',w:2.2,pts}],{x0:0,x1:23,y0:50,y1:100,yl:'% inside band',xt:[0,3,6,9,12,15,18,21].map(h=>[h,hh(h)]),ref:80,shade:nightBands(),tf:h=>hh(h)+':00 UTC',vf:v=>v.toFixed(0)+'%',m:{l:36,r:10,t:16,b:22}});
+  const v=pts.map(p=>p[1]).filter(x=>x!=null);$('#n-covh').textContent=v.length?`Dashed line is the 80% target. Coverage ranges from ${Math.round(Math.min(...v))}% to ${Math.round(Math.max(...v))}% across hours.`:'';
+}
+/* ---------------- stations view ---------------- */
+function drawTable(){
+  const i=nfi(),ss=selStations().map(s=>({s,re:s.re[i],rh:s.rh[i],rl:s.rl[i],bl:s.bl[i],gain:s.re[i]-s.rl[i],n:s.n})).filter(x=>x.rl!=null);
+  const key=S.sortKey,dir=S.sortDir;ss.sort((a,b)=>{const va=key==='id'?a.s.id:key==='city'?a.s.city:key==='bld'?a.s.bld:key==='veg'?a.s.veg:a[key],vb=key==='id'?b.s.id:key==='city'?b.s.city:key==='bld'?b.s.bld:key==='veg'?b.s.veg:b[key];return(va>vb?1:va<vb?-1:0)*dir});
+  const H=[['city','City','l'],['id','Station','l'],['bld','Built-up'],['veg','Veg.'],['re','ERA5 RMSE'],['rh','Offset RMSE'],['rl','HeatLab RMSE'],['gain','Gain'],['bl','HeatLab bias'],['n','Hours']];
+  $('#b-tbl').innerHTML=`<table><thead><tr>${H.map(([k,t,c])=>`<th class="${c||''}" data-k="${k}">${t}${S.sortKey===k?(S.sortDir>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead><tbody>${ss.map(x=>`<tr data-k="${stKey(x.s)}" class="${S.sel===stKey(x.s)?'sel':''}"><td class="l">${CN[x.s.city]}</td><td class="l">${x.s.id}</td><td>${pc(x.s.bld)}</td><td>${pc(x.s.veg)}</td><td>${f2(x.re)}</td><td>${f2(x.rh)}</td><td class="b">${f2(x.rl)}</td><td class="${x.gain>0?'pos':'neg'}">${sg(x.gain)}</td><td>${sg(x.bl)}</td><td>${K(x.n)}</td></tr>`).join('')}</tbody></table>`;
+  $('#b-tbl').querySelectorAll('th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(S.sortKey===k)S.sortDir*=-1;else{S.sortKey=k;S.sortDir=(k==='id'||k==='city')?1:-1}drawTable()});
+  $('#b-tbl').querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>pickStation(tr.dataset.k));
+  $('#p-tbl .st').textContent=`${ss.length} stations · click a row to select · metrics honour the day/night filter, not the hour range`;
+}
+const SX={bld:'Built-up within 250 m',veg:'Vegetation within 250 m',wat:'Water within 250 m',road:'Road length within 250 m'};
+function drawStScat(){
+  const sel=$('#stX');if(!sel.options.length){sel.innerHTML=Object.keys(SX).map(k=>`<option value="${k}">${SX[k]}</option>`).join('');sel.onchange=drawStScat}
+  const xk=sel.value||'bld',i=nfi(),ss=selStations().filter(s=>s.ad[i]!=null),{s,w,h}=svgIn('st-sc'),m={l:40,r:10,t:16,b:28};
+  const xs=ss.map(q=>q[xk]),ys=ss.flatMap(q=>[q.ad[i],q.pd[i]]),x1=Math.max(...xs)*1.05,y0=Math.min(...ys)-.2,y1=Math.max(...ys)+.2,a=frame(s,w,h,m,0,x1,y0,y1,{yl:'Mean anomaly vs ERA5, °C',xl:SX[xk],zero:true,xf:v=>xk==='road'?Math.round(v):Math.round(v*100)+'%'});
+  ss.forEach(q=>{const c=CCOL[CITIES.indexOf(q.city)];const x=a.X(q[xk]);el('line',{x1:x,x2:x,y1:a.Y(q.ad[i]),y2:a.Y(q.pd[i]),stroke:c,opacity:.35},s);el('circle',{cx:x,cy:a.Y(q.pd[i]),r:3.4,fill:'#fff',stroke:c,'stroke-width':1.4},s);
+    const d=el('circle',{cx:x,cy:a.Y(q.ad[i]),r:4,fill:c,stroke:S.sel===stKey(q)?'#18202F':'#fff','stroke-width':S.sel===stKey(q)?2:1,style:'cursor:pointer'},s);d.onmousemove=e=>showTip(e,`<b>${CN[q.city]} ${q.id}</b><br>Measured ${sg(q.ad[i])} · HeatLab ${sg(q.pd[i])} °C`);d.onmouseleave=hideTip;d.onclick=()=>pickStation(stKey(q))});
+  legend('l-stsc',[...S.cities].sort().map(ci=>[CCOL[ci],CN[CITIES[ci]],0,1]).concat([['#8792A5','Filled: measured · ring: HeatLab',0,1]]));
+}
+function drawGain(){
+  const i=nfi(),ss=selStations().filter(s=>s.rl[i]!=null).map(s=>({s,g:s.re[i]-s.rl[i]})).sort((a,b)=>b.g-a.g),{s,w,h}=svgIn('st-gain'),m={l:30,r:10,t:14,b:26};
+  const lo=Math.min(0,...ss.map(x=>x.g)),hi=Math.max(...ss.map(x=>x.g))*1.05,a=frame(s,w,h,m,0,ss.length,lo,hi,{yl:'ERA5 RMSE − HeatLab RMSE, °C',xl:'Stations ranked by gain',zero:true,xt:[]}),bw=a.iw/ss.length;
+  ss.forEach((x,k)=>{const r=el('rect',{x:a.X(k)+.5,y:Math.min(a.Y(x.g),a.Y(0)),width:Math.max(1,bw-1),height:Math.abs(a.Y(x.g)-a.Y(0)),fill:CCOL[CITIES.indexOf(x.s.city)],opacity:S.sel&&S.sel!==stKey(x.s)?.4:1},s);r.onmousemove=e=>showTip(e,`<b>${CN[x.s.city]} ${x.s.id}</b><br>Gain ${sg(x.g)} °C`);r.onmouseleave=hideTip;r.onclick=()=>pickStation(stKey(x.s))});
+  const neg=ss.filter(x=>x.g<=0).length;$('#p-st-gain .st').textContent=neg?`${neg} of ${ss.length} stations do not improve`:`all ${ss.length} stations improve`;
+}
+/* ---------------- cities view ---------------- */
+function drawCmp(){
+  const {s,w,h}=svgIn('cmp'),cs=[...S.cities].sort(),rows=rowsF(),m={l:40,r:10,t:16,b:30},data=cs.map(ci=>tot(rows.filter(r=>r[0]===ci)));
+  const mx=Math.max(...data.flatMap(t=>M.map(k=>rmse(t,k))).filter(v=>!isNaN(v)))*1.1,a=frame(s,w,h,m,0,cs.length,0,mx,{yl:'RMSE, °C',xt:cs.map((ci,i)=>[i+.5,CN[CITIES[ci]]])}),bw=a.iw/cs.length*.78/4;
+  cs.forEach((ci,i)=>M.forEach((k,j)=>{const v=rmse(data[i],k);if(isNaN(v))return;const x=a.X(i+.11)+j*bw,r=el('rect',{x,y:a.Y(v),width:bw-1.5,height:a.ih+m.t-a.Y(v),fill:MC[k],opacity:k==='i'?.55:1},s);r.onmousemove=e=>showTip(e,`<b>${CN[CITIES[ci]]}</b> · ${K(data[i].n)} hours<br>${MN[k]}: ${f2(v)} °C`);r.onmouseleave=hideTip;if(k==='l')el('text',{x:x+bw/2,y:a.Y(v)-4,'text-anchor':'middle','font-size':10.5,'font-weight':600,fill:'#18202F'},s).textContent=f2(v)}));
+  legend('l-cmp',M.map(k=>[MC[k],MN[k]+(k==='i'?' (live sensors)':''),0,1]));
+}
+function drawCityTab(){
+  const rows=rowsF(),au=R.data_audit,cs=[...S.cities].sort();
+  $('#b-ctab').innerHTML=`<table><thead><tr><th class="l">City</th><th>Stations</th><th>Record</th><th>HeatLab</th><th>ERA5</th><th>Gain</th></tr></thead><tbody>${cs.map(ci=>{const c=CITIES[ci],a=au.find(x=>x.city===c),t=tot(rows.filter(r=>r[0]===ci));return`<tr style="cursor:default"><td class="l"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${CCOL[ci]};margin-right:6px"></span>${CN[c]}</td><td>${a.stations}${a.eligible_headline?'':'*'}</td><td>${a.first.slice(0,7)} → ${a.last.slice(0,7)}</td><td class="b">${f2(rmse(t,'l'))}</td><td>${f2(rmse(t,'e'))}</td><td class="pos">${sg(rmse(t,'e')-rmse(t,'l'))}</td></tr>`}).join('')}</tbody></table><div class="note">* fewer than 20 stations: trains the model, not a headline spatial result. RMSE in °C for the current time filter.</div>`;
+}
+function dumbbell(id,data,legId,keys){
+  const {s,w,h}=svgIn(id),cs=Object.keys(data),m={l:62,r:150,t:12,b:26},vals=cs.flatMap(c=>keys.map(k=>data[c][k].rmse)),lo=Math.floor(Math.min(...vals)*10)/10-.05,hi=Math.ceil(Math.max(...vals)*10)/10+.05,X=v=>m.l+(v-lo)/(hi-lo)*(w-m.l-m.r),rh=(h-m.t-m.b)/cs.length;
+  niceTicks(lo,hi,6).forEach(v=>{el('line',{x1:X(v),x2:X(v),y1:m.t,y2:h-m.b,stroke:'#E7EBF2'},s);el('text',{x:X(v),y:h-m.b+14,'text-anchor':'middle','font-size':10.5,fill:'#5C687C'},s).textContent=v.toFixed(1)});
+  el('text',{x:w-m.r,y:h-2,'text-anchor':'end','font-size':10.5,fill:'#5C687C'},s).textContent='RMSE, °C';
+  const COLD={era5_raw:MC.e,hour_mean:MC.h,lgbm_full:MC.l,lgbm_no_static:'#18202F',oracle_city_hour_mean:'#18202F'},NM={era5_raw:'Raw ERA5',hour_mean:'Hour offset',lgbm_full:'HeatLab',lgbm_no_static:'HeatLab, no surroundings',oracle_city_hour_mean:"City's own hour-mean (upper bound)"};
+  cs.forEach((c,i)=>{const y=m.t+rh*(i+.5);el('text',{x:0,y:y+4,'font-size':12,'font-weight':600,fill:'#18202F'},s).textContent=CN[c];
+    const v=['era5_raw','hour_mean','lgbm_full'].map(k=>data[c][k].rmse);el('line',{x1:X(Math.min(...v)),x2:X(Math.max(...v)),y1:y,y2:y,stroke:'#C9D0DD','stroke-width':3,'stroke-linecap':'round'},s);
+    keys.forEach(k=>{const x=X(data[c][k].rmse),hl=k==='lgbm_full';let n;if(k.startsWith('oracle'))n=el('path',{d:`M${x} ${y-7}L${x+6} ${y}L${x} ${y+7}L${x-6} ${y}Z`,fill:'#fff',stroke:'#18202F','stroke-width':1.6},s);else n=el('circle',{cx:x,cy:y,r:hl?7:k==='lgbm_no_static'?3.5:5.5,fill:k==='lgbm_no_static'?'#fff':COLD[k],stroke:hl?'#18202F':COLD[k],'stroke-width':k==='lgbm_no_static'?2:hl?1.5:0},s);n.onmousemove=e=>showTip(e,`<b>${CN[c]}</b><br>${NM[k]}: ${f2(data[c][k].rmse)} °C`);n.onmouseleave=hideTip});
+    const dh=data[c].hour_mean.rmse-data[c].lgbm_full.rmse;el('text',{x:w-m.r+10,y:y+4,'font-size':11.5,'font-weight':600,fill:dh>0?'#0C6A56':'#9B2B1D'},s).textContent=(dh>0?'beats offset by ':'trails offset by ')+f2(Math.abs(dh))});
+  legend(legId,keys.map(k=>[COLD[k],NM[k],0,1]));
+}
+function drawLoco(){dumbbell('loco',R.loco,'l-loco',['era5_raw','hour_mean','lgbm_full','lgbm_no_static','oracle_city_hour_mean'])}
+function drawTmp(){const d={};Object.keys(R.temporal.by_city.era5_raw).forEach(c=>{d[c]={};Object.keys(R.temporal.by_city).forEach(k=>d[c][k]=R.temporal.by_city[k][c])});dumbbell('tmp',d,'l-tmp',['era5_raw','hour_mean','lgbm_full','lgbm_no_static'])}
+function hbars(id,rows,xmax,m={l:170,r:56,t:6,b:6}){
+  const {s,w,h}=svgIn(id),rh=(h-m.t-m.b)/rows.length,iw=w-m.l-m.r;
+  rows.forEach((r,i)=>{const y=m.t+rh*(i+.5);el('text',{x:0,y:y+4,'font-size':11.5,'font-weight':r.hl?700:500,fill:'#18202F'},s).textContent=r.label;el('rect',{x:m.l,y:y-6,width:r.v/xmax*iw,height:12,rx:2,fill:r.c},s);el('text',{x:m.l+r.v/xmax*iw+6,y:y+4,'font-size':11.5,'font-weight':600,fill:'#18202F'},s).textContent=(m.dec===3?f3:f2)(r.v)})}
+function drawLeak(){const L=R.leakage;hbars('leak',[{label:'Random rows',v:L.random_rows.overall.rmse,c:'#A9B1C3'},{label:'Random stations',v:L.random_stations.overall.rmse,c:'#6F7FA8'},{label:'Spatial blocks (reported)',v:L.spatial_blocks.overall.rmse,c:MC.l,hl:1}],1.4);$('#n-leak').innerHTML=`Random rows flatter the model by <b>${Math.round(L.inflation_pct)}%</b> because neighbouring stations share hours across train and test.`}
+function drawAb(){const o=R.spatial.overall;hbars('ab',[{label:'Raw ERA5',v:o.era5_raw.rmse,c:MC.e},{label:'No surroundings',v:o.lgbm_no_static.rmse,c:'#18202F'},{label:'No wind-aware',v:o.lgbm_no_wind_aware.rmse,c:'#4F5D75'},{label:'HeatLab (full)',v:o.lgbm_full.rmse,c:MC.l,hl:1}],1.7);$('#n-ab').innerHTML=`Surroundings are worth <b>${f2(o.lgbm_no_static.rmse-o.lgbm_full.rmse)} °C</b>. Wind-aware features change RMSE by only <b>${f3(Math.abs(o.lgbm_no_wind_aware.rmse-o.lgbm_full.rmse))} °C</b>: no measurable benefit.`}
+/* ---------------- drivers ---------------- */
+function drawShap(){
+  const top=R.shap.slice(0,14),lab={e_dt3:'ERA5 temp. change, 3 h',e_dtd:'ERA5 change since yesterday',e_v:'ERA5 north-south wind',hod_cos:'Hour of day',dist_center_km:'Distance to city centre',wat_500:'Water within 500 m',e_ws:'ERA5 wind speed',doy_cos:'Season',doy_sin:'Season (phase)',e_rh:'ERA5 humidity',bld_500:'Buildings within 500 m',e_t2m:'ERA5 temperature',e_t24:'ERA5 24 h mean',e_cloud:'ERA5 cloud cover',elev_rel:'Height above city mean',e_u:'ERA5 east-west wind',e_sw:'ERA5 solar radiation',e_dew:'ERA5 dew point',wc_built_250:'Built-up land within 250 m (WorldCover)',wc_built_100:'Built-up land within 100 m (WorldCover)',wc_built_500:'Built-up land within 500 m (WorldCover)',wc_tree_250:'Tree cover within 250 m (WorldCover)',wc_water_500:'Water within 500 m (WorldCover)'};
+  const {s,w,h}=svgIn('shap'),m={l:176,r:44,t:8,b:8},rh=(h-m.t-m.b)/top.length,mx=top[0].mean_abs_shap*1.05;
+  top.forEach((t,i)=>{const y=m.t+rh*(i+.5),st=/^(bld|veg|wat|road|elev|dist|up_|down_|wc_|dsm_)/.test(t.feature),L=t.mean_abs_shap/mx*(w-m.l-m.r);el('text',{x:0,y:y+4,'font-size':11.5,fill:'#18202F'},s).textContent=lab[t.feature]||t.feature;const r=el('rect',{x:m.l,y:y-6,width:L,height:12,rx:2,fill:st?'#E4572E':'#17143D'},s);el('text',{x:m.l+L+5,y:y+4,'font-size':11,fill:'#5C687C'},s).textContent=f2(t.mean_abs_shap)})}
+function drawSens(){
+  const {b}=dims('sens');b.innerHTML='';const ks=Object.keys(R.sensitivity),SF={veg_250:'Vegetation within 250 m',bld_250:'Buildings within 250 m',wat_250:'Water within 250 m',road_250:'Road length within 250 m',elev_rel:'Height above city mean',up_veg:'Vegetation upwind'};
+  b.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4px;padding:6px';
+  const ys=ks.flatMap(k=>[...R.sensitivity[k].night.y,...R.sensitivity[k].day.y]),y0=Math.floor(Math.min(...ys)*4)/4,y1=Math.ceil(Math.max(...ys)*4)/4;
+  ks.forEach(k=>{const c=document.createElement('div');c.style.cssText='position:relative;min-height:0';b.appendChild(c);const W=c.clientWidth||200,H=c.clientHeight||170,s=el('svg',{viewBox:`0 0 ${W} ${H}`,width:W,height:H},c),d=R.sensitivity[k],xs=d.night.x,x0=xs[0],x1=xs[xs.length-1],a=frame(s,W,H,{l:30,r:6,t:18,b:22},x0,x1,y0,y1,{xf:v=>+v.toFixed(2)});
+    el('text',{x:30,y:11,'font-size':11,'font-weight':600,fill:'#18202F'},s).textContent=SF[k]||k;
+    [['night','#17143D'],['day','#E4572E']].forEach(([n,col])=>el('path',{d:path(d[n].x.map((x,i)=>[x,d[n].y[i]]),a.X,a.Y),fill:'none',stroke:col,'stroke-width':2.2},s))});
+}
+function drawRel(){
+  const rel=R.observed_relations,names={veg_250:'Vegetation 250 m',bld_250:'Buildings 250 m',wat_250:'Water 250 m',road_250:'Road length 250 m',elev_rel:'Height above city mean'},ks=Object.keys(rel);
+  const cols=[];CITIES.forEach(c=>{if(rel[ks[0]].night.some(x=>x.city===c))cols.push(c)});
+  const cell=(x)=>{if(!x)return'<td>–</td>';const a=Math.min(1,Math.abs(x.rho)),bg=x.rho>0?`rgba(228,87,46,${a*.55})`:`rgba(47,95,208,${a*.55})`;return`<td style="background:${bg};${x.p<.05?'font-weight:700':'color:#5C687C'}">${sg(x.rho)}${x.p<.05?'':' ·'}</td>`};
+  $('#b-rel').innerHTML=`<table><thead><tr><th class="l">Surrounding</th><th class="l">Time</th>${cols.map(c=>`<th>${CN[c]}</th>`).join('')}</tr></thead><tbody>${ks.map(k=>['night','day'].map(t=>`<tr style="cursor:default"><td class="l">${t==='night'?(names[k]||k):''}</td><td class="l">${t==='night'?'Night':'Day'}</td>${cols.map(c=>cell(rel[k][t].find(x=>x.city===c))).join('')}</tr>`).join('')).join('')}</tbody></table>`;
+}
+/* ---------------- validity ---------------- */
+let gSel=(R.gates.find(g=>g.status!=='pass')||R.gates[0]).id;
+function drawGates(){
+  const b=$('#b-gates');b.innerHTML=`<div class="gt">${R.gates.map(g=>`<button class="${g.status}" data-id="${g.id}" aria-pressed="${g.id===gSel}" title="${g.title}">${g.id}</button>`).join('')}</div><div class="gd" id="gd"></div>`;
+  b.querySelectorAll('button').forEach(x=>x.onclick=()=>{gSel=x.dataset.id;drawGates()});
+  const g=R.gates.find(x=>x.id===gSel);$('#gd').innerHTML=`<h4>${g.id}: ${g.title} <span class="d ${g.status==='pass'?'g':'w'}" style="margin-left:6px">${g.status==='pass'?'Passed':g.status==='warn'?'Warning':'Failed'}</span></h4><p><b>Found.</b> ${g.evidence.replace(/^(\w+) have fewer/,'$1 has fewer')}.</p><p><b>Rule.</b> ${g.rule}</p>`;
+  const np=R.gates.filter(x=>x.status==='pass').length;$('#p-gates .st').textContent=`${np} passed, ${R.gates.length-np} warnings, 0 failed`;
+}
+function drawCal(){
+  const cv=R.spatial.coverage,rows=Object.keys(cv.by_city).map(c=>({c,v:cv.by_city[c]})),{s,w,h}=svgIn('cal'),m={l:60,r:40,t:12,b:24},rh=(h-m.t-m.b)/rows.length,X=v=>m.l+(v-.5)/.5*(w-m.l-m.r);
+  [.6,.7,.8,.9,1].forEach(v=>{el('line',{x1:X(v),x2:X(v),y1:m.t,y2:h-m.b,stroke:'#E7EBF2'},s);el('text',{x:X(v),y:h-m.b+14,'text-anchor':'middle','font-size':10.5,fill:'#5C687C'},s).textContent=Math.round(v*100)+'%'});
+  el('rect',{x:X(.73),y:m.t,width:X(.87)-X(.73),height:h-m.t-m.b,fill:'rgba(20,135,111,.10)'},s);el('line',{x1:X(.8),x2:X(.8),y1:m.t,y2:h-m.b,stroke:'#14876F','stroke-dasharray':'4 3','stroke-width':1.5},s);
+  rows.forEach((r,i)=>{const y=m.t+rh*(i+.5);el('text',{x:0,y:y+4,'font-size':11.5,'font-weight':600,fill:'#18202F'},s).textContent=CN[r.c];el('rect',{x:X(.5),y:y-6,width:X(r.v)-X(.5),height:12,rx:2,fill:r.v<.73||r.v>.87?'#C98A1B':'#14876F'},s);el('text',{x:X(r.v)+5,y:y+4,'font-size':11.5,'font-weight':600,fill:'#18202F'},s).textContent=Math.round(r.v*100)+'%'});
+  const out=rows.filter(r=>r.v<.73||r.v>.87).map(r=>CN[r.c]);$('#n-cal').innerHTML=`Shaded band is the accepted 73–87% range. ${out.length?`${out.join(' and ')} fall${out.length===1?'s':''} outside it, so the interval is narrower than its 80% label there.`:'All cities are inside it.'} Overall ${Math.round(cv.empirical*100)}%, mean width ${f2(cv.mean_width)} °C.`;
+}
+function drawStatic(){
+  const nf=R.data_audit.filter(c=>!c.eligible_headline).map(c=>CN[c.city]).join(', ');
+  $('#b-lim').innerHTML='<div class="lim">'+[['Four European networks only','Biel, Ghent, Novi Sad and Rennes. Hot-arid and tropical cities are untested; do not use HeatLab there.'],[nf+' is thin','Fewer than 20 stations: it trains the model and appears in transfer tests, not in headline spatial results.'],['Transfer is mixed','Held-out city: HeatLab beats raw ERA5 in all four (barely in Novi Sad), but beats the hour offset only in Biel, Ghent and Rennes.'],['Station metrics vs hour filter','Per-station figures (map, table) honour the day/night filter but not the hour range; city and hour charts honour all filters.'],['Surroundings are a snapshot','OpenStreetMap as of today; tagging completeness differs between cities and vegetation is the weakest layer.'],['Unequal records','Biel one summer, Rennes one year, Novi Sad about four years, Ghent seven. 10-minute and hourly sources are mixed.'],['Scatter and histogram are samples','4,000 random held-out hours per city. All KPIs and line charts use every held-out hour.'],['Association, not cause','Sensitivity curves and correlations describe four cities; they do not predict the effect of planting or paving.']].map(([a,b])=>`<div><b>${a}</b><span>${b}</span></div>`).join('')+'</div>';
+  const c=D.card;$('#b-prov').innerHTML=`<div class="lim"><div><b>Data</b><span>FAIRUrbTemp station observations (QC-flagged values excluded). ERA5 hourly reanalysis and elevation via Open-Meteo. Surroundings come from OpenStreetMap recomputed with GeoPandas (local UTM, exact overlay) plus ESA WorldCover land cover and Copernicus elevation rasters; the feature comparison and the GPU neural network are on the Geospatial &amp; GPU page. No synthetic data.</span></div><div><b>Model</b><span>LightGBM, ${c.hyperparameters.n} trees, ${K(c.train_rows)} training rows. Target is station 2 m temperature minus ERA5 2 m temperature. Quantile models give the 80% interval.</span></div><div><b>Validation</b><span>Five spatial folds by station cluster, 0.5 km buffer, tuning on an inner split of training stations only. Random-row scoring reported only to show leakage.</span></div><div><b>Intended use</b><span>${c.intended_use.charAt(0).toUpperCase()+c.intended_use.slice(1)}</span></div></div>`;
+}
+
+/* ---------------- geospatial & GPU ---------------- */
+function drawAbl(){
+  const G=D.geo;if(!G){$('#b-abl').innerHTML='<div class="note">Run scripts 05–09 to add geospatial results.</div>';return}
+  const base=G.abl[0].rmse,col=k=>k==='no_static'?'#18202F':k==='osm_gpd+raster'?MC.l:k.includes('gpd')?'#C13E18':k.includes('raster')?'#14876F':'#8A94A8';
+  hbars('abl',G.abl.map(a=>({label:`${a.label} · ${f3(a.rmse)}`,v:Math.max(0,base-a.rmse),c:col(a.k),hl:a.k==='osm_gpd+raster'})),.1,{l:300,r:56,t:6,b:6,dec:3});
+  const g=G.abl.find(a=>a.k==='osm_gpd'),j=G.abl.find(a=>a.k==='osm_js'),b=G.abl.find(a=>a.k==='osm_gpd+raster'),r=G.abl.find(a=>a.k==='raster');
+  $('#n-abl').innerHTML=`Rebuilding the OSM features with GeoPandas lowers RMSE from ${f3(j.rmse)} to ${f3(g.rmse)} °C (better in ${g.folds_vs_grid.folds_improved} of 5 folds). Rasters alone reach ${f3(r.rmse)} without any OSM data. Both together: ${f3(b.rmse)} °C. Gains are small next to the effect of validation design.`;
+}
+function drawDlt(){
+  const G=D.geo;if(!G)return;const d=G.dl.rows['osm_js+raster'],m=G.mlp.sets['osm_js+raster'],bb=G.dl.best_blend,cv=m.coverage80;
+  const row=(n,x,cov,b)=>`<tr style="cursor:default"><td class="l"${b?' style="font-weight:700"':''}>${n}</td><td>${f3(x.rmse)}</td><td>${f3(x.mae)}</td><td>${cov==null?'–':pc(cov)}</td></tr>`;
+  $('#b-dlt').innerHTML=`<table><thead><tr><th class="l">Model</th><th>RMSE °C</th><th>MAE °C</th><th>80% band covers</th></tr></thead><tbody>${row('LightGBM, OSM grid + rasters',d.lightgbm,null)}${row('Neural network (residual MLP), same inputs',d.mlp_gpu,cv)}${row('Average of the two',d.average,null,1)}<tr style="cursor:default"><td class="l">Average, with the GeoPandas LightGBM</td><td>${f3(bb['blend_w0.5'])}</td><td>–</td><td>–</td></tr></tbody></table>`;
+  const wins=d.mlp_gpu.by_fold.filter((x,i)=>x<d.lightgbm.by_fold[i]).length,wa=d.average.by_fold.filter((x,i)=>x<d.lightgbm.by_fold[i]).length;
+  $('#n-dlt').innerHTML=`${G.mlp.gpu_name}, ${G.mlp.epochs} epochs, fixed settings. The network alone ties LightGBM (better in ${wins} of 5 folds); the average beats LightGBM in ${wa} of 5. Its 80% band covers only ${pc(cv)}: too narrow, so LightGBM's quantile band stays the reported interval. Equal weights, no tuning on test folds.`;
+}
+function drawRef(){
+  const G=D.geo;if(!G||!G.referee)return;const w=G.referee.water_250,cs=['Biel','Ghent','Rennes','NoviSad'],c=v=>v==null?'–':sg(v,2).replace('+','');
+  $('#b-ref').innerHTML=`<table><thead><tr><th class="l">City</th><th>WorldCover water</th><th>Browser grid</th><th>GeoPandas</th></tr></thead><tbody>${cs.map(k=>`<tr style="cursor:default"><td class="l">${CN[k]}</td><td>${pc(w[k].mean_worldcover)}</td><td>${w[k].grid==null?'n/a':f2(w[k].grid)}</td><td style="font-weight:${w[k].grid!=null&&w[k].geopandas-w[k].grid>.3?700:400}">${w[k].geopandas==null?'n/a':f2(w[k].geopandas)}</td></tr>`).join('')}</tbody></table>`;
+  $('#n-ref').innerHTML=`The first browser method missed Biel's lake: OSM stores large water bodies as several ways that must be joined into rings. GeoPandas joins them (polygonize), projects to local UTM metres and overlays exact areas. Novi Sad has no water within 250 m of any station, so no correlation exists there.`;
+}
+function drawLay(){
+  const G=D.geo,z=G&&G.zarr;
+  $('#b-lay').innerHTML=`<div class="lim">${[['OpenStreetMap vectors','Buildings, vegetation, water, roads. EPSG:4326 → UTM 32630 / 32631 / 32632 / 32634; exact overlay in 100, 250, 500 m circles and 8 wedges (GeoPandas, Shapely).'],['ESA WorldCover 2021','10 m land cover, EPSG:4326. Built, tree, low vegetation, crop and water shares per buffer (rasterio; buffers built in UTM, then transformed to the raster CRS).'],['Copernicus GLO-30 DSM','30 m surface model (includes buildings and trees). Station height, local relief and height relative to the 250 m and 500 m mean.'],['ERA5 as Zarr',z?`xarray Dataset (city × time) stored as Zarr, converted from the CSVs: ${z.dims.city} cities, ${K(z.dims.time)} hours, ${z.nvars} variables, ${z.t0} to ${z.t1}.`:'xarray Dataset stored as Zarr, converted from the CSVs.']].map(([a,b])=>`<div><b>${a}</b><span>${b}</span></div>`).join('')}</div>`;
+}
+/* ---------------- routing / refresh ---------------- */
+const DRAW={
+  overview:()=>{kpis();drawMap();drawRmseHour();drawAnomHour();drawScatter();drawHist();findings()},
+  time:()=>{drawMonth();drawTemp();wkOptions();drawWeek();drawCovH()},
+  stations:()=>{drawTable();drawStScat();drawGain()},
+  cities:()=>{drawCmp();drawCityTab();drawLoco();drawTmp();drawLeak();drawAb()},
+  drivers:()=>{drawShap();drawSens();drawRel()},
+  geo:()=>{drawAbl();drawDlt();drawRef();drawLay()},
+  valid:()=>{drawGates();drawCal();drawStatic()}
+};
+function go(v){S.view=v;document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));[...$('#nav').querySelectorAll('button')].forEach(b=>b.setAttribute('aria-current',b.dataset.v===v));$('#main').scrollTop=0;refresh()}
+let pend=null;function refresh(){cancelAnimationFrame(pend);pend=requestAnimationFrame(()=>{summary();DRAW[S.view]()})}
+new ResizeObserver(()=>refresh()).observe($('#main'));
+buildFilters();refresh();
+if(location.hash){const v=location.hash.slice(1);if(DRAW[v])go(v)}
+</script>
+</body>
+</html>

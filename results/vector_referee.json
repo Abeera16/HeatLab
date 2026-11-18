@@ -1,0 +1,68 @@
+{
+ "water_250": {
+  "Biel": {
+   "grid": 0.2577731426282926,
+   "geopandas": 0.9805960968511435,
+   "mean_worldcover": 0.04604986269369995,
+   "mean_grid": 0.008987499999999999,
+   "mean_geopandas": 0.0597625053422103
+  },
+  "Ghent": {
+   "grid": 0.9423387955733731,
+   "geopandas": 0.9465193378452678,
+   "mean_worldcover": 0.041208791208791166,
+   "mean_grid": 0.06576666666666665,
+   "mean_geopandas": 0.06548325434161341
+  },
+  "NoviSad": {
+   "grid": null,
+   "geopandas": null,
+   "mean_worldcover": 0.0,
+   "mean_grid": 0.0,
+   "mean_geopandas": 0.0
+  },
+  "Rennes": {
+   "grid": 0.9442672683777543,
+   "geopandas": 0.9409486304524101,
+   "mean_worldcover": 0.0011073210467365782,
+   "mean_grid": 0.006373913043478261,
+   "mean_geopandas": 0.0066381076153381215
+  }
+ },
+ "vegetation_250": {
+  "Biel": {
+   "grid": 0.34175724793119616,
+   "geopandas": 0.5545693485784909
+  },
+  "Ghent": {
+   "grid": 0.7591670241744739,
+   "geopandas": 0.7551929765638962
+  },
+  "NoviSad": {
+   "grid": 0.5790159485379099,
+   "geopandas": 0.9162959526426083
+  },
+  "Rennes": {
+   "grid": 0.9143540443896121,
+   "geopandas": 0.9135795794310042
+  }
+ },
+ "buildings_250": {
+  "Biel": {
+   "grid": 0.8900285726809387,
+   "geopandas": 0.8843682227415064
+  },
+  "Ghent": {
+   "grid": 0.6622162712645069,
+   "geopandas": 0.6421811314939059
+  },
+  "NoviSad": {
+   "grid": 0.9126460028649718,
+   "geopandas": 0.918037270533476
+  },
+  "Rennes": {
+   "grid": 0.9471016772235772,
+   "geopandas": 0.9451923911032034
+  }
+ }
+}

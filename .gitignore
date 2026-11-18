@@ -1,0 +1,8 @@
+data/processed/
+archive_v1/
+results_v2/
+models_v2/
+results/*.parquet
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
